@@ -17,6 +17,8 @@ package net.milkbowl.vault;
 
 import net.milkbowl.vault.chat.Chat;
 import net.milkbowl.vault.economy.Economy;
+import net.milkbowl.vault.economy.IdentityEconomy;
+import net.milkbowl.vault.economy.wrappers.EconomyWrapper;
 import net.milkbowl.vault.permission.Permission;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
@@ -24,13 +26,13 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.server.ServiceRegisterEvent;
+import org.bukkit.event.server.ServiceUnregisterEvent;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.RegisteredServiceProvider;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -75,10 +77,10 @@ public class Vault extends JavaPlugin {
 
         getCommand("vault-info").setExecutor(this);
         getCommand("vault-convert").setExecutor(this);
+        new LegacyEconomyListener(this);
         // Schedule to check the version every 30 minutes for an update. This is to update the most recent 
         // version so if an admin reconnects they will be warned about newer versions.
         this.getServer().getScheduler().runTask(this, new Runnable() {
-
             @Override
             public void run() {
                 // Programmatically set the default permission value cause Bukkit doesn't handle plugin.yml properly for Load order STARTUP plugins
@@ -337,5 +339,33 @@ public class Vault extends JavaPlugin {
                 return chatName;
             }
         }));
+    }
+    public static class LegacyEconomyListener implements Listener {
+        private final Vault vault;
+
+        private LegacyEconomyListener (Vault vault) {
+            vault.getServer().getPluginManager().registerEvents(this, vault);
+            this.vault = vault;
+        }
+
+        @EventHandler
+        public void onLegacyRegister(ServiceRegisterEvent event) {
+            RegisteredServiceProvider<?> eventProvider = event.getProvider();
+            if (eventProvider.getService() != Economy.class)
+                return;
+            RegisteredServiceProvider<Economy> provider = vault.getServer().getServicesManager().getRegistration(Economy.class);
+            if (Bukkit.getServicesManager().isProvidedFor(IdentityEconomy.class))
+                return;
+            EconomyWrapper wrapper = new EconomyWrapper(provider.getProvider());
+            Bukkit.getServicesManager().register(IdentityEconomy.class, wrapper.legacy(), vault, ServicePriority.Normal);
+        }
+
+        @EventHandler
+        public void onUnregister(ServiceUnregisterEvent event){
+            RegisteredServiceProvider<?> eventProvider = event.getProvider();
+            if (eventProvider.getService() != Economy.class)
+                return;
+            Bukkit.getServicesManager().unregister(IdentityEconomy.class);
+        }
     }
 }
