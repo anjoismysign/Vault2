@@ -38,6 +38,7 @@ So, what features do I _think_ you'll like the most?
 ## Permissions
 * vault.admin
   - Determines if a player should receive the update notices
+  - (Not currently used)
 
 ## License
 Copyright (C) 2011-2018 Morgan Humes <morgan@lanaddict.com>
@@ -59,14 +60,6 @@ with Vault. If not, see <http://www.gnu.org/licenses/>.
 Vault comes with all libraries needed to build from the current branch and
 also comes with an Apache Ant build file (build.xml) and a Maven build file
 (pom.xml). Maven is currently the preferred build method.
-
-
-## Dependencies
-Because Vault provides a bridge to other plugins, their binaries will be
-required to build from. To ease this, they have been included in the lib
-folder and will be updated from time to time. For plugin developers, it
-is not necessary to use these libraries when implementing Vault. You will
-only need to compile against Vault.
 
 
 ## Supported Plugins
