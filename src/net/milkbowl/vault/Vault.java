@@ -18,11 +18,13 @@ package net.milkbowl.vault;
 import net.milkbowl.vault.chat.Chat;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.IdentityEconomy;
+import net.milkbowl.vault.economy.LegacyEconomy;
 import net.milkbowl.vault.economy.wrappers.EconomyWrapper;
 import net.milkbowl.vault.permission.Permission;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -33,6 +35,7 @@ import org.bukkit.event.server.ServiceUnregisterEvent;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.ServicePriority;
+import org.bukkit.plugin.ServicesManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -50,11 +53,11 @@ public class Vault extends JavaPlugin {
 
     private static final String VAULT_BUKKIT_URL = "https://dev.bukkit.org/projects/Vault";
     private static Logger log;
-    private Permission perms;
     private String newVersionTitle = "";
     private double newVersion = 0;
     private double currentVersion = 0;
     private String currentVersionTitle = "";
+    private ServicesManager sm;
     private Vault plugin;
 
     @Override
@@ -70,10 +73,12 @@ public class Vault extends JavaPlugin {
         log = this.getLogger();
         currentVersionTitle = getDescription().getVersion().split("-")[0];
         currentVersion = Double.valueOf(currentVersionTitle.replaceFirst("\\.", ""));
+        sm = getServer().getServicesManager();
         // set defaults
         getConfig().addDefault("update-check", true);
         getConfig().options().copyDefaults(true);
         saveConfig();
+        loadPermission();
 
         getCommand("vault-info").setExecutor(this);
         getCommand("vault-convert").setExecutor(this);
@@ -85,8 +90,7 @@ public class Vault extends JavaPlugin {
             public void run() {
                 // Programmatically set the default permission value cause Bukkit doesn't handle plugin.yml properly for Load order STARTUP plugins
                 org.bukkit.permissions.Permission perm = getServer().getPluginManager().getPermission("vault.update");
-                if (perm == null)
-                {
+                if (perm == null) {
                     perm = new org.bukkit.permissions.Permission("vault.update");
                     perm.setDefault(PermissionDefault.OP);
                     plugin.getServer().getPluginManager().addPermission(perm);
@@ -99,7 +103,7 @@ public class Vault extends JavaPlugin {
                     public void run() {
                         if (getServer().getConsoleSender().hasPermission("vault.update") && getConfig().getBoolean("update-check", true)) {
                             try {
-                            	log.info("Checking for Updates ... ");
+                                log.info("Checking for Updates ... ");
                                 newVersion = updateCheck(currentVersion);
                                 if (newVersion > currentVersion) {
                                     log.warning("Stable Version: " + newVersionTitle + " is out!" + " You are still running version: " + currentVersionTitle);
@@ -166,7 +170,7 @@ public class Vault extends JavaPlugin {
                 econ2 = econ.getProvider();
             }
             if (economies.length() > 0) {
-            	economies += ", ";
+                economies += ", ";
             }
             economies += econName;
         }
@@ -190,11 +194,11 @@ public class Vault extends JavaPlugin {
                 econ2.createPlayerAccount(op);
                 double diff = econ1.getBalance(op) - econ2.getBalance(op);
                 if (diff > 0) {
-                	econ2.depositPlayer(op, diff);
+                    econ2.depositPlayer(op, diff);
                 } else if (diff < 0) {
-                	econ2.withdrawPlayer(op, -diff);
+                    econ2.withdrawPlayer(op, -diff);
                 }
-                
+
             }
         }
         sender.sendMessage("Conversion complete, please verify the data before using it.");
@@ -259,25 +263,6 @@ public class Vault extends JavaPlugin {
         sender.sendMessage(String.format("[%s] Chat: %s [%s]", getDescription().getName(), chat == null ? "None" : chat.getName(), registeredChats));
     }
 
-    /**
-     * Determines if all packages in a String array are within the Classpath
-     * This is the best way to determine if a specific plugin exists and will be
-     * loaded. If the plugin package isn't loaded, we shouldn't bother waiting
-     * for it!
-     * @param packages String Array of package names to check
-     * @return Success or Failure
-     */
-    private static boolean packagesExists(String...packages) {
-        try {
-            for (String pkg : packages) {
-                Class.forName(pkg);
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     public double updateCheck(double currentVersion) {
         try {
             URL url = new URL("https://api.curseforge.com/servermods/files?projectids=33184");
@@ -300,6 +285,17 @@ public class Vault extends JavaPlugin {
             log.info("There was an issue attempting to check for the latest version.");
         }
         return currentVersion;
+    }
+
+    /**
+     * Attempts to load Permission Addons
+     */
+    private void loadPermission() {
+        Permission perms = new SuperPerms(this);
+        sm.register(Permission.class, perms, this, ServicePriority.Lowest);
+        log.info("[Permission] SuperPermissions loaded as backup permission system.");
+
+        Permission perms1 = sm.getRegistration(Permission.class).getProvider();
     }
 
     private void findCustomData(Metrics metrics) {
@@ -340,32 +336,48 @@ public class Vault extends JavaPlugin {
             }
         }));
     }
+
     public static class LegacyEconomyListener implements Listener {
         private final Vault vault;
+        private LegacyEconomy legacyProvider;
 
-        private LegacyEconomyListener (Vault vault) {
+        private LegacyEconomyListener(Vault vault) {
             vault.getServer().getPluginManager().registerEvents(this, vault);
             this.vault = vault;
+            RegisteredServiceProvider<Economy> legacyProvider = vault.getServer().getServicesManager().getRegistration(Economy.class);
+            if (legacyProvider == null)
+                return;
+            RegisteredServiceProvider<IdentityEconomy> identityProvider = vault.getServer().getServicesManager().getRegistration(IdentityEconomy.class);
+            if (identityProvider != null)
+                return;
+            EconomyWrapper wrapper = new EconomyWrapper(legacyProvider.getProvider());
+            this.legacyProvider = wrapper.legacy();
+            Bukkit.getLogger().info(wrapper.legacy().getName() + " has been provided with a legacy wrapper.");
+            Bukkit.getServicesManager().register(IdentityEconomy.class, this.legacyProvider, vault, ServicePriority.Lowest);
         }
 
+        @SuppressWarnings("unchecked")
         @EventHandler
         public void onLegacyRegister(ServiceRegisterEvent event) {
             RegisteredServiceProvider<?> eventProvider = event.getProvider();
-            if (eventProvider.getService() != Economy.class)
+            if (!eventProvider.getService().equals(Economy.class))
                 return;
-            RegisteredServiceProvider<Economy> provider = vault.getServer().getServicesManager().getRegistration(Economy.class);
-            if (Bukkit.getServicesManager().isProvidedFor(IdentityEconomy.class))
+            RegisteredServiceProvider<Economy> legacyProvider = (RegisteredServiceProvider<Economy>) eventProvider;
+            RegisteredServiceProvider<IdentityEconomy> identityProvider = vault.getServer().getServicesManager().getRegistration(IdentityEconomy.class);
+            if (identityProvider != null)
                 return;
-            EconomyWrapper wrapper = new EconomyWrapper(provider.getProvider());
-            Bukkit.getServicesManager().register(IdentityEconomy.class, wrapper.legacy(), vault, ServicePriority.Normal);
+            EconomyWrapper wrapper = new EconomyWrapper(legacyProvider.getProvider());
+            this.legacyProvider = wrapper.legacy();
+            Bukkit.getLogger().severe(ChatColor.RED + wrapper.legacy().getName() + " has been provided with a legacy wrapper.");
+            Bukkit.getServicesManager().register(IdentityEconomy.class, this.legacyProvider, vault, ServicePriority.Lowest);
         }
 
         @EventHandler
-        public void onUnregister(ServiceUnregisterEvent event){
+        public void onUnregister(ServiceUnregisterEvent event) {
             RegisteredServiceProvider<?> eventProvider = event.getProvider();
             if (eventProvider.getService() != Economy.class)
                 return;
-            Bukkit.getServicesManager().unregister(IdentityEconomy.class);
+            Bukkit.getServicesManager().unregister(IdentityEconomy.class, legacyProvider);
         }
     }
 }
