@@ -377,7 +377,9 @@ public class Vault extends JavaPlugin {
             RegisteredServiceProvider<?> eventProvider = event.getProvider();
             if (eventProvider.getService() != Economy.class)
                 return;
-            Bukkit.getServicesManager().unregister(IdentityEconomy.class, legacyProvider);
+            if (legacyProvider != null)
+                Bukkit.getServicesManager().unregister(IdentityEconomy.class, legacyProvider);
+            legacyProvider = null;
         }
     }
 }
