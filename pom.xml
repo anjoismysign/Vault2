@@ -6,7 +6,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <bukkitVersion>1.13.1-R0.1-SNAPSHOT</bukkitVersion>
         <mainClass>${project.groupId}.${project.artifactId}</mainClass>
-        <api.version>1.7.4</api.version>
+        <api.version>1.7.6</api.version>
     </properties>
 
     <!-- Project information -->
@@ -74,7 +74,7 @@
         <dependency>
             <groupId>net.milkbowl.vault</groupId>
             <artifactId>vaultapi</artifactId>
-            <version>1.7.4</version>
+            <version>${api.version}</version>
         </dependency>
         <dependency>
             <groupId>org.bstats</groupId>
@@ -113,7 +113,7 @@
                     <createDependencyReducedPom>false</createDependencyReducedPom>
                     <artifactSet>
                         <includes>
-                            <include>net.milkbowl.vault:VaultAPI</include>
+                            <include>net.milkbowl.vault:vaultapi</include>
                             <include>org.bstats</include>
                         </includes>
                     </artifactSet>
